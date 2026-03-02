@@ -24,6 +24,12 @@ ECS_LAUNCH_TYPE = os.environ.get("ECS_LAUNCH_TYPE", "FARGATE")
 ECS_PLATFORM_VERSION = os.environ.get("ECS_PLATFORM_VERSION", "LATEST")
 ECS_ASSIGN_PUBLIC_IP = os.environ.get("ECS_ASSIGN_PUBLIC_IP", "ENABLED")
 
+ECS_TASK_POLLING = os.environ.get("ECS_TASK_POLLING", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
 ECS_WAIT_TIMEOUT_SECONDS = int(os.environ.get("ECS_WAIT_TIMEOUT_SECONDS", "300"))
 ECS_POLL_INTERVAL_SECONDS = int(os.environ.get("ECS_POLL_INTERVAL_SECONDS", "5"))
 
@@ -166,20 +172,22 @@ def handler(event, context):
         task_arn = tasks[0].get("taskArn") if tasks else None
 
         if task_arn:
-            # Wait for the task to complete and return the poll result (which is an HTTP-style dict).
-            return poll_task(task_arn)
-
-        # If no task ARN was returned, respond accordingly.
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(
-                {
-                    "message": "No task ARN returned by run_task",
-                    "region": _AWS_REGION,
+            logger.info(f"ECS task polling {ECS_TASK_POLLING}")
+            if ECS_TASK_POLLING:
+                # Wait for the task to complete and return the poll result (which is an HTTP-style dict).
+                poll_task(task_arn)
+            else:
+                logger.info(f"ECS task has been started {task_arn}")
+                return {
+                    "statusCode": 200,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps(
+                        {
+                            "message": "Lambda Dispatch has started ECS task!",
+                            "region": _AWS_REGION,
+                        }
+                    ),
                 }
-            ),
-        }
 
     except (BotoCoreError, ClientError) as e:
         logger.exception(f"Error running ECS task: {str(e)}")

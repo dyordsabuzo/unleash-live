@@ -1,0 +1,135 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Whether to run terraform apply for both auth and compute (true/false)"
+        required: false
+        default: "false"
+      environment:
+        description: "Which environment tfvars file to use (e.g. prod, staging)"
+        required: false
+        default: "prod"
+
+jobs:
+  auth:
+    name: Deploy Auth (infra/auth)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-infra-auth
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init (auth)
+        working-directory: infra/auth
+        run: terraform init -input=false
+
+      - name: Terraform Validate (auth)
+        working-directory: infra/auth
+        run: terraform validate
+
+      - name: Terraform Plan (auth)
+        id: plan-auth
+        working-directory: infra/auth
+        run: |
+          terraform plan -var-file=tfvars/prod.tfvars -no-color -out=tfplan -input=false
+
+      - name: Upload auth plan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-auth
+          path: infra/auth/tfplan
+
+      - name: Show auth plan (final)
+        if: always()
+        working-directory: infra/auth
+        run: terraform show -no-color -json tfplan || true
+
+      - name: Terraform Apply (auth) (manual)
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        working-directory: infra/auth
+        env:
+          TF_IN_AUTOMATION: true
+        run: terraform apply -input=false -auto-approve tfplan
+
+  compute:
+    name: Deploy Compute (infra/compute)
+    runs-on: ubuntu-latest
+    needs: auth
+    concurrency:
+      group: deploy-infra-compute
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        env: [prod-us, prod-eu]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init (compute)
+        working-directory: infra/compute
+        run: terraform init -input=false
+
+      - name: Terraform Validate (compute)
+        working-directory: infra/compute
+        run: terraform validate
+
+      - name: Terraform Plan (compute)
+        id: plan-compute
+        working-directory: infra/compute
+        run: |
+          terraform plan -var-file=tfvars/${{ matrix.env }}.tfvars -out=tfplan-${{ matrix.env }} -no-color
+
+      - name: Upload compute plan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-compute-${{ matrix.env }}
+          path: infra/compute/tfplan-${{ matrix.env }}
+
+      - name: Show compute plan (final)
+        if: always()
+        working-directory: infra/compute
+        run: terraform show -no-color -json tfplan-${{ matrix.env }} || true
+
+      - name: Terraform Apply (compute) (manual)
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'true' }}
+        working-directory: infra/compute
+        env:
+          TF_IN_AUTOMATION: true
+        run: terraform apply tfplan-${{ matrix.env }}

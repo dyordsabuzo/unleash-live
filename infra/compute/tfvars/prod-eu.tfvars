@@ -1,5 +1,5 @@
-region                = "eu-west-1"
-environment           = "prod-eu"
-cognito_user_pool_arn = "arn:aws:cognito-idp:us-east-1:231585964142:userpool/us-east-1_x97Ikr6OA"
-dynamodb_table_name   = "GreetingLogs"
-sns_topic_arn         = "arn:aws:sns:us-east-1:231585964142:my-sns-topic"
+region              = "eu-west-1"
+environment         = "prod-eu"
+dynamodb_table_name = "GreetingLogs"
+
+sns_topic_arn = "arn:aws:sns:us-east-1:231585964142:my-sns-topic"

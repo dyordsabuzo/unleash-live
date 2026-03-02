@@ -38,7 +38,7 @@ resource "aws_cognito_user_pool_client" "client" {
 
 resource "random_password" "testuser" {
   length           = 10
-  override_special = "_+=,.@:/-"
+  override_special = "_+,.@:/-"
   min_upper        = 1
   min_lower        = 1
   min_numeric      = 1
