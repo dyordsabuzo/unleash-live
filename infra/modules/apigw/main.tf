@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    aws = {
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.cognito] # Maps to passed provider
+    }
+  }
+}
+
 # API Gateway
 resource "aws_api_gateway_rest_api" "api" {
   name        = "unleash-live-rest-api"
@@ -17,7 +26,7 @@ resource "aws_api_gateway_authorizer" "cognito_auth" {
   name          = "cognito-authorizer"
   type          = "COGNITO_USER_POOLS"
   rest_api_id   = aws_api_gateway_rest_api.api.id
-  provider_arns = [var.cognito_user_pool_arn]
+  provider_arns = data.aws_cognito_user_pools.pools.arns
 }
 
 # method requests and authorization

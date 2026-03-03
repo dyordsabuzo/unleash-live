@@ -10,3 +10,8 @@ provider "aws" {
     }
   }
 }
+
+provider "aws" {
+  alias  = "cognito"
+  region = var.cognito_region
+}

@@ -52,8 +52,17 @@ def publish_to_sns(payload):
             )
             raise
     else:
-        logger.warning("SNS_TOPIC_ARN not set; skipping SNS publish")
-        return None
+        logger.error("SNS_TOPIC_ARN not set")
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {
+                    "message": "Internal Server Error",
+                    "region": _AWS_REGION,
+                }
+            ),
+        }
 
 
 def write_to_dynamodb(payload):
@@ -96,6 +105,7 @@ def handler(event, context):
         "repo": os.environ.get("UNLEASH_CANDIDATE_REPO"),
     }
 
+    logger.debug(f"Payload: {payload}")
     try:
         # 1) Write a record to DynamoDB table `GreetingLogs` (or the table specified in DDB_TABLE_NAME)
         write_to_dynamodb(payload)

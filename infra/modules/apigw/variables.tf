@@ -1,5 +1,5 @@
-variable "cognito_user_pool_arn" {
-  description = "Cognito user pool ARN"
+variable "cognito_user_pool_name" {
+  description = "Cognito user pool name"
   type        = string
 }
 

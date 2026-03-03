@@ -49,30 +49,18 @@ resource "aws_ssm_parameter" "testuser_email" {
   name  = "/cognito/testuser/EMAIL"
   type  = "String"
   value = var.test_user_email
-
-  lifecycle {
-    ignore_changes = [value]
-  }
 }
 
 resource "aws_ssm_parameter" "testuser_password" {
   name  = "/cognito/testuser/PASSWORD"
   type  = "SecureString"
   value = random_password.testuser.result
-
-  lifecycle {
-    ignore_changes = [value]
-  }
 }
 
 resource "aws_ssm_parameter" "testuser_repo" {
   name  = "/cognito/testuser/REPO"
   type  = "String"
-  value = "UNSET"
-
-  lifecycle {
-    ignore_changes = [value]
-  }
+  value = var.test_user_repo
 }
 
 # Test user

@@ -46,12 +46,17 @@ module "functions" {
       }
     }
   ]
+
+  providers = {
+    aws         = aws
+    aws.cognito = aws.cognito
+  }
 }
 
 module "api" {
-  source                = "../modules/apigw"
-  cognito_user_pool_arn = var.cognito_user_pool_arn
-  lambda_invoke_arns    = module.functions.lambda_invoke_arns
+  source                 = "../modules/apigw"
+  cognito_user_pool_name = var.cognito_user_pool_name
+  lambda_invoke_arns     = module.functions.lambda_invoke_arns
 
   endpoint_configs = [
     {
@@ -63,4 +68,9 @@ module "api" {
       methods   = ["POST"]
     }
   ]
+
+  providers = {
+    aws         = aws
+    aws.cognito = aws.cognito
+  }
 }

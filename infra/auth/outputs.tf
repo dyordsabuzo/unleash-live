@@ -13,11 +13,6 @@ output "user_pool_client_id" {
   value       = module.auth.user_pool_client_id
 }
 
-output "sns_topic_arn" {
-  description = "The ARN of the SNS Topic"
-  value       = aws_sns_topic.sns.arn
-}
-
 output "cognito_region" {
   description = "Region where cognito resources are created"
   value       = var.region

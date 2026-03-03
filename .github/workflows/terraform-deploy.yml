@@ -1,0 +1,105 @@
+name: Terraform reusable
+
+on:
+  workflow_call:
+    inputs:
+      directory:
+        required: true
+        type: string
+      envs:
+        required: false
+        type: string
+        description: 'JSON array string of environment names to run the matrix for, e.g. ["prod","prod-eu"]'
+      apply:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_SESSION_TOKEN:
+        required: false
+      AWS_REGION:
+        required: true
+
+jobs:
+  terraform:
+    strategy:
+      matrix:
+        env: ${{ fromJson(inputs.envs) }}
+    runs-on: ubuntu-latest
+    env:
+      TF_WORKSPACE: ${{ matrix.env }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init
+        working-directory: ${{ inputs.directory }}
+        run: terraform init -upgrade -input=false
+
+      - name: Select or create Terraform workspace
+        working-directory: ${{ inputs.directory }}
+        env:
+          TF_WORKSPACE: ${{ matrix.env }}
+        run: |
+          echo "Using TF_WORKSPACE=${TF_WORKSPACE}"
+          terraform workspace select "${TF_WORKSPACE}" || terraform workspace new "${TF_WORKSPACE}"
+
+      - name: Terraform Validate
+        working-directory: ${{ inputs.directory }}
+        run: terraform validate
+
+      - name: Run tfsec security scan
+        working-directory: ${{ inputs.directory }}
+        run: |
+          # Install tfsec (official install script) and run a scan producing a JSON report per environment.
+          # This keeps the step simple and avoids relying on a specific action input schema.
+          set -e
+          echo "Installing tfsec..."
+          curl -sSL https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          echo "Running tfsec scan..."
+          tfsec --format json --out tfsec-report-${{ matrix.env }}.json .
+          echo "tfsec scan complete; report written to tfsec-report-${{ matrix.env }}.json"
+
+      - name: Terraform Plan
+        working-directory: ${{ inputs.directory }}
+        env:
+          TF_WORKSPACE: ${{ matrix.env }}
+        run: |
+          terraform plan -var-file=tfvars/${{ matrix.env }}.tfvars -no-color -out=tfplan-${{ matrix.env }} -input=false
+
+      - name: Upload plan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ replace(inputs.directory, '/', '-') }}-${{ matrix.env }}
+          path: ${{ inputs.directory }}/tfplan-${{ matrix.env }}
+
+      - name: Terraform Apply (manual)
+        if: ${{ inputs.apply }}
+        working-directory: ${{ inputs.directory }}
+        env:
+          TF_IN_AUTOMATION: true
+          TF_WORKSPACE: ${{ matrix.env }}
+        run: terraform apply -input=false -auto-approve tfplan-${{ matrix.env }}
+
+      - name: Show plan (final)
+        if: always()
+        working-directory: ${{ inputs.directory }}
+        run: terraform show -no-color -json tfplan-${{ matrix.env }} || true

@@ -5,3 +5,4 @@ tfsec 1.28.14
 python 3.12.0
 infracost 0.10.43
 aws-vault 7.2.0
+k6 1.6.1

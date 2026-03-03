@@ -5,131 +5,126 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      apply:
-        description: "Whether to run terraform apply for both auth and compute (true/false)"
-        required: false
-        default: "false"
-      environment:
-        description: "Which environment tfvars file to use (e.g. prod, staging)"
-        required: false
-        default: "prod"
 
 jobs:
   auth:
     name: Deploy Auth (infra/auth)
-    runs-on: ubuntu-latest
     concurrency:
       group: deploy-infra-auth
       cancel-in-progress: true
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.7
-
-      - name: Terraform Init (auth)
-        working-directory: infra/auth
-        run: terraform init -input=false
-
-      - name: Terraform Validate (auth)
-        working-directory: infra/auth
-        run: terraform validate
-
-      - name: Terraform Plan (auth)
-        id: plan-auth
-        working-directory: infra/auth
-        run: |
-          terraform plan -var-file=tfvars/prod.tfvars -no-color -out=tfplan -input=false
-
-      - name: Upload auth plan artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan-auth
-          path: infra/auth/tfplan
-
-      - name: Show auth plan (final)
-        if: always()
-        working-directory: infra/auth
-        run: terraform show -no-color -json tfplan || true
-
-      - name: Terraform Apply (auth) (manual)
-        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-        working-directory: infra/auth
-        env:
-          TF_IN_AUTOMATION: true
-        run: terraform apply -input=false -auto-approve tfplan
+    uses: .github/workflows/terraform-deploy.yml
+    with:
+      directory: infra/auth
+      envs: ["prod"]
+      apply: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
 
   compute:
     name: Deploy Compute (infra/compute)
-    runs-on: ubuntu-latest
     needs: auth
     concurrency:
       group: deploy-infra-compute
       cancel-in-progress: true
-    strategy:
-      matrix:
-        env: [prod-us, prod-eu]
+    uses: .github/workflows/terraform-deploy.yml
+    with:
+      directory: infra/compute
+      envs: ["prod-us", "prod-eu"]
+      apply: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+api-test:
+  name: API tests
+  runs-on: ubuntu-latest
+  needs: [auth, compute]
+  strategy:
+    matrix:
+      env: [prod-us, prod-eu]
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.7
+    - name: Setup AWS CLI
+      uses: aws-actions/setup-aws-cli@v2
+      with:
+        version: "2.x"
 
-      - name: Terraform Init (compute)
-        working-directory: infra/compute
-        run: terraform init -input=false
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.7
 
-      - name: Terraform Validate (compute)
-        working-directory: infra/compute
-        run: terraform validate
+    - name: Fetch test user
+      run: |
+        TEST_USER_EMAIL=$(aws ssm get-parameter \
+          --name /cognito/testuser/EMAIL --region $COGNITO_REGION \
+          --query "Parameter.Value" --with-decryption --output text)
 
-      - name: Terraform Plan (compute)
-        id: plan-compute
-        working-directory: infra/compute
-        run: |
-          terraform plan -var-file=tfvars/${{ matrix.env }}.tfvars -out=tfplan-${{ matrix.env }} -no-color
+        TEST_USER_PASSWORD=$(aws ssm get-parameter \
+            --name /cognito/testuser/PASSWORD --region $COGNITO_REGION \
+            --query "Parameter.Value" --with-decryption --output text)
 
-      - name: Upload compute plan artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan-compute-${{ matrix.env }}
-          path: infra/compute/tfplan-${{ matrix.env }}
+        echo "TEST_USER_EMAIL=$TEST_USER_EMAIL" >> $GITHUB_ENV
+        echo "TEST_USER_PASSWORD=$TEST_USER_PASSWORD" >> $GITHUB_ENV
 
-      - name: Show compute plan (final)
-        if: always()
-        working-directory: infra/compute
-        run: terraform show -no-color -json tfplan-${{ matrix.env }} || true
+    - name: Fetch api token
+      working-directory: infra/auth
+      env:
+        TF_WORKSPACE: prod
+        TEST_USER_EMAIL: ${{ env.TEST_USER_EMAIL }}
+        TEST_USER_PASSWORD: ${{ env.TEST_USER_PASSWORD }}
+      run: |
+        terraform init -upgrade -input=false
+        terraform workspace select "${TF_WORKSPACE}"
+        COGNITO_USER_POOL_ARN=$(terraform output -raw user_pool_arn)
+        COGNITO_USER_POOL=$(terraform output -raw user_pool_id)
+        COGNITO_CLIENT_ID=$(terraform output -raw user_pool_client_id)
+        COGNITO_REGION=$(terraform output -raw cognito_region)
 
-      - name: Terraform Apply (compute) (manual)
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'true' }}
-        working-directory: infra/compute
-        env:
-          TF_IN_AUTOMATION: true
-        run: terraform apply tfplan-${{ matrix.env }}
+        COGNITO_TOKEN=$(aws cognito-idp admin-initiate-auth \
+          --user-pool-id $COGNITO_USER_POOL --client-id $COGNITO_CLIENT_ID \
+          --auth-flow ADMIN_NO_SRP_AUTH \
+          --auth-parameters USERNAME=$TEST_USER_EMAIL,PASSWORD=$TEST_USER_PASSWORD \
+          --region $COGNITO_REGION \
+          --query "AuthenticationResult.IdToken" --output text)
+
+        echo "COGNITO_TOKEN=$COGNITO_TOKEN" >> $GITHUB_ENV
+
+    - name: Fetch api url
+      working-directory: infra/compute
+      env:
+        TF_WORKSPACE: ${{ matrix.env }}
+        TEST_USER_EMAIL: ${{ env.TEST_USER_EMAIL }}
+        TEST_USER_PASSWORD: ${{ env.TEST_USER_PASSWORD }}
+      run: |
+        terraform init -upgrade -input=false
+        terraform workspace select "${TF_WORKSPACE}"
+        APIGW_INVOKE_URL=$(terraform output -raw apigw_invoke_url)
+        REQUEST_REGION=$(terraform output -raw region)
+        echo "APIGW_INVOKE_URL=$APIGW_INVOKE_URL" >> $GITHUB_ENV
+        echo "REQUEST_REGION=$REQUEST_REGION" >> $GITHUB_ENV
+
+    - name: Run k6 test
+      uses: grafana/k6-action@v0.3.1
+      with:
+        filename: test/k6/testing.js
+        flags: --out json=results.json
+      env:
+        BASE_URL: ${{ env.APIGW_INVOKE_URL }}
+        API_TOKEN: ${{ env.COGNITO_TOKEN }}
+        REQUEST_REGION: ${{ env.REQUEST_REGION }}

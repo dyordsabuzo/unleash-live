@@ -113,7 +113,12 @@ def poll_task(task_arn):
             )
             return {
                 "statusCode": 504,
-                "body": json.dumps({"error": generic_exception_message}),
+                "body": json.dumps(
+                    {
+                        "error": generic_exception_message,
+                        "region": _AWS_REGION,
+                    }
+                ),
             }
         time.sleep(ECS_POLL_INTERVAL_SECONDS)
 
@@ -127,7 +132,12 @@ def handler(event, context):
         logger.error(msg)
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": generic_exception_message}),
+            "body": json.dumps(
+                {
+                    "error": generic_exception_message,
+                    "region": _AWS_REGION,
+                }
+            ),
         }
 
     subnets = _parse_csv(ECS_SUBNETS)
@@ -165,7 +175,12 @@ def handler(event, context):
             logger.error(f"ECS run_task failures: {failures}")
             return {
                 "statusCode": 500,
-                "body": json.dumps({"error": generic_exception_message}),
+                "body": json.dumps(
+                    {
+                        "error": generic_exception_message,
+                        "region": _AWS_REGION,
+                    }
+                ),
             }
 
         tasks = resp.get("tasks")
@@ -193,5 +208,10 @@ def handler(event, context):
         logger.exception(f"Error running ECS task: {str(e)}")
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": generic_exception_message}),
+            "body": json.dumps(
+                {
+                    "error": generic_exception_message,
+                    "region": _AWS_REGION,
+                }
+            ),
         }

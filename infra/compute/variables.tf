@@ -14,8 +14,13 @@ variable "environment" {
   default     = "prod"
 }
 
-variable "cognito_user_pool_arn" {
-  description = "The ARN of the Cognito User Pool"
+variable "cognito_region" {
+  description = "AWS region where cognito is set"
+  type        = string
+}
+
+variable "cognito_user_pool_name" {
+  description = "Cognito user pool name"
   type        = string
 }
 

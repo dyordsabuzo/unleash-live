@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    aws = {
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.cognito] # Maps to passed provider
+    }
+  }
+}
+
 # dynamodb table
 resource "aws_dynamodb_table" "table" {
   name           = var.dynamodb_table_name
@@ -43,7 +52,10 @@ resource "aws_lambda_function" "function" {
   timeout          = each.value.timeout
 
   environment {
-    variables = try(each.value.environment, {})
+    variables = merge(try(each.value.environment, {}), {
+      UNLEASH_CANDIDATE_EMAIL = data.aws_ssm_parameter.candidate_email.value
+      UNLEASH_CANDIDATE_REPO  = data.aws_ssm_parameter.candidate_repo.value
+    })
   }
 
   depends_on = [
