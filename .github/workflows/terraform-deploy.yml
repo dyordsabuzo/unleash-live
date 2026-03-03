@@ -63,13 +63,10 @@ jobs:
         working-directory: ${{ inputs.directory }}
         run: terraform init -upgrade -input=false
 
-      # - name: Select or create Terraform workspace
-      #   working-directory: ${{ inputs.directory }}
-      #   env:
-      #     TF_WORKSPACE: ${{ matrix.env }}
-      #   run: |
-      #     echo "Using TF_WORKSPACE=${TF_WORKSPACE}"
-      #     terraform workspace select "${TF_WORKSPACE}" || terraform workspace new "${TF_WORKSPACE}"
+      - name: Select or create Terraform workspace
+        working-directory: ${{ inputs.directory }}
+        run: |
+          terraform workspace select "${{ matrix.env }}" || terraform workspace new "${{ matrix.env }}"
 
       - name: Terraform Validate
         working-directory: ${{ inputs.directory }}
@@ -95,7 +92,6 @@ jobs:
           terraform plan -var-file=tfvars/${{ matrix.env }}.tfvars -no-color -out=tfplan-${{ matrix.env }} -input=false
 
       - name: Upload plan artifact
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan-compute-${{ matrix.env }}
@@ -110,6 +106,5 @@ jobs:
         run: terraform apply -input=false -auto-approve tfplan-${{ matrix.env }}
 
       - name: Show plan (final)
-        if: always()
         working-directory: ${{ inputs.directory }}
         run: terraform show -no-color -json tfplan-${{ matrix.env }} || true

@@ -194,10 +194,12 @@ k6 tests are under `test/k6/`.
     - latency thresholds
     - payload `region` matches `REQUEST_REGION` (when set)
 
+- Wrapper script: `test/k6/testing.sh`
+
 Run locally:
 ```/dev/null/commands.md#L35-40
 # Example:
-BASE_URL=https://api.example.com REQUEST_REGION=us-east-1 API_TOKEN=abc k6 run test/k6/testing.js
+./test/k6/testing.sh
 ```
 
 Notes:
