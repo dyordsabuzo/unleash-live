@@ -22,6 +22,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEPLOY_ROLE: ${{ secrets.AWS_DEPLOY_ROLE }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      AWS_EXTERNAL_ID: ${{ secrets.AWS_EXTERNAL_ID }}
 
   compute:
     name: Deploy Compute (infra/compute)
@@ -39,6 +42,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEPLOY_ROLE: ${{ secrets.AWS_DEPLOY_ROLE }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      AWS_EXTERNAL_ID: ${{ secrets.AWS_EXTERNAL_ID }}
 
   api-test:
     name: API tests
@@ -51,13 +57,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: Configure AWS credentials (assume-role via IAM user)
+        uses: aws-actions/configure-aws-credentials@v5.1.1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.AWS_DEPLOY_ROLE }}
+          role-external-id: ${{ secrets.AWS_EXTERNAL_ID }}
+          role-session-name: deployment
+          role-skip-session-tagging: true
           aws-region: ${{ secrets.AWS_REGION }}
+          role-duration-seconds: 1200
 
       - name: Setup AWS CLI
         uses: aws-actions/setup-aws-cli@v2
