@@ -63,13 +63,13 @@ jobs:
         working-directory: ${{ inputs.directory }}
         run: terraform init -upgrade -input=false
 
-      - name: Select or create Terraform workspace
-        working-directory: ${{ inputs.directory }}
-        env:
-          TF_WORKSPACE: ${{ matrix.env }}
-        run: |
-          echo "Using TF_WORKSPACE=${TF_WORKSPACE}"
-          terraform workspace select "${TF_WORKSPACE}" || terraform workspace new "${TF_WORKSPACE}"
+      # - name: Select or create Terraform workspace
+      #   working-directory: ${{ inputs.directory }}
+      #   env:
+      #     TF_WORKSPACE: ${{ matrix.env }}
+      #   run: |
+      #     echo "Using TF_WORKSPACE=${TF_WORKSPACE}"
+      #     terraform workspace select "${TF_WORKSPACE}" || terraform workspace new "${TF_WORKSPACE}"
 
       - name: Terraform Validate
         working-directory: ${{ inputs.directory }}
