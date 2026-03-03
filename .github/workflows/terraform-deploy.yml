@@ -88,7 +88,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: terraform-plan-${{ replace(inputs.directory, '/', '-') }}-${{ matrix.env }}
+          name: terraform-plan-compute-${{ matrix.env }}
           path: ${{ inputs.directory }}/tfplan-${{ matrix.env }}
 
       - name: Terraform Apply (manual)

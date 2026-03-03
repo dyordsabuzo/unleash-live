@@ -15,7 +15,7 @@ jobs:
     uses: .github/workflows/terraform-deploy.yml
     with:
       directory: infra/auth
-      envs: ["prod"]
+      envs: '["prod"]'
       apply: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -32,7 +32,7 @@ jobs:
     uses: .github/workflows/terraform-deploy.yml
     with:
       directory: infra/compute
-      envs: ["prod-us", "prod-eu"]
+      envs: '["prod-us", "prod-eu"]'
       apply: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
